@@ -7,7 +7,25 @@
   </head>
   <body>
     <button id="connectButton">Connect</button>
+    <hr/>
+    <input type="color" value="#ff0000" id="color0">
+    <input type="color" value="#ff0000" id="color1">
+    <input type="color" value="#ff0000" id="color2">
+    <input type="color" value="#ff0000" id="color3">
     <button id="writeButton">Send color</button>
+    <hr/>
+    <input type="range" min="1" max="10" id="speedFactor"> Velocidad<br/>
+    <select id="effect">
+      <option value="patterns/red-passion.png" selected>Red Passion</option>
+      <option value="patterns/green-radioactive.png">Green Radioactive</option>
+      <option value="patterns/rainbow.png">Rainbow</option>
+      <option value="patterns/single-rainbow.png">Single rainbow</option>
+      <option value="patterns/weird-combinations.png">Weird combinations</option>
+    </select>
+    <button id="startButton">Start effect</button>
+    <button id="stopButton">Stop effect</button>
+    <div id="counter"></div>
+    <canvas id="canvas" style="width:32px;height:1024px;"></canvas>
     <script src="main.js"></script>
   </body>
 </html>
