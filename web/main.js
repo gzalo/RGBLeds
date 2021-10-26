@@ -64,16 +64,16 @@ async function write(colors) {
 
   view[0] = 0xff;
 
-  view[1] = modColors[0].b;
+  view[1] = modColors[0].g;
   view[2] = modColors[0].r;
-  view[3] = modColors[0].g;
+  view[3] = modColors[0].b;
 
-  view[4] = modColors[1].b;
+  view[4] = modColors[1].g;
   view[5] = modColors[1].r;
-  view[6] = modColors[1].g;
+  view[6] = modColors[1].b;
 
-  view[7] = modColors[2].b;
-  view[8] = modColors[2].r;
+  view[7] = modColors[2].r;
+  view[8] = modColors[2].b;
   view[9] = modColors[2].g;
 
   view[10] = modColors[3].b;
