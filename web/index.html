@@ -3,27 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RGB LEDs</title>
+    <title>Lights</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
   </head>
   <body>
-    <button id="connectSerialButton">Connect Serial</button>
-    <button id="connectBluetoothButton">Connect Bluetooth</button>
+    <div class="container">
+    <h1 class="title">Lights</h1>
+    <button id="connectSerialButton" class="button">Connect Serial</button>
+    <button id="connectBluetoothButton" class="button">Connect Bluetooth</button>
     <div id="status"></div>
     <hr/>
     <input type="color" value="#ff0000" id="color0">
     <input type="color" value="#ff0000" id="color1">
     <input type="color" value="#ff0000" id="color2">
     <input type="color" value="#ff0000" id="color3">
-    <button id="writeButton">Send color</button>
+    <br>
+    <button id="writeButton" class="button mt-2">Send color</button>
     <hr/>
 
-    Ajustar colores: <br>
-    <input type="range" min="0" max="1" step="0.05" id="rFactor"> Rojo<br/>
-    <input type="range" min="0" max="1" step="0.05" id="gFactor"> Verde<br/>
-    <input type="range" min="0" max="1" step="0.05" id="bFactor"> Azul<br/>
+    Color correction: <br>
+    <input type="range" min="0" max="1" step="0.05" id="rFactor"> Red<br/>
+    <input type="range" min="0" max="1" step="0.05" id="gFactor"> Green<br/>
+    <input type="range" min="0" max="1" step="0.05" id="bFactor"> Blue<br/>
     <hr/>
-    
-    <input type="range" min="1" max="10" id="speedFactor"> Velocidad<br/>
+
+    <input type="range" min="1" max="10" id="speedFactor"> Speed<br/>
     <select id="effect">
       <option value="patterns/green-forest.png" selected>Green Forest</option>
       <option value="patterns/red-passion.png" selected>Red Passion</option>
@@ -32,10 +36,12 @@
       <option value="patterns/single-rainbow.png">Single rainbow</option>
       <option value="patterns/weird-combinations.png">Weird combinations</option>
     </select>
-    <button id="startButton">Start effect</button>
-    <button id="stopButton">Stop effect</button>
-    <div id="counter"></div>
+    <br>
+    <button id="startButton" class="button mt-2">Start effect</button>
+    <button id="stopButton" class="button mt-2">Stop effect</button>
+    <div id="counter" class="mt-2"></div>
     <canvas id="canvas" style="width:32px;height:1024px;"></canvas>
     <script src="main.js"></script>
+    </div>
   </body>
 </html>

@@ -177,7 +177,7 @@ async function onTick() {
   if (tick >= height * speedFactor) tick = 0;
   const tickL = tick / speedFactor;
 
-  document.getElementById("counter").innerHTML = tickL;
+  // document.getElementById("counter").innerHTML = tickL;
 
   const imgData = context.getImageData(0, 0, 4, height);
 
