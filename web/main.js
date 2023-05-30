@@ -80,7 +80,7 @@ async function write(colors) {
   view[11] = modColors[3].r;
   view[12] = modColors[3].g;
 
-  console.log(view);
+  //console.log(view);
 
   if(port){
     const writer = port.writable.getWriter();
