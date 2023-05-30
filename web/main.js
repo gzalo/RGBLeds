@@ -121,11 +121,11 @@ function stopEffect() {
   clearInterval(timer);
 }
 
-function toRGB(arr) {
+function toRGB(arr, factor) {
   return {
-    r: arr[0],
-    g: arr[1],
-    b: arr[2],
+    r: arr[0] * factor[0],
+    g: arr[1] * factor[1],
+    b: arr[2] * factor[2],
   };
 }
 
@@ -172,7 +172,7 @@ function getPixelValue(imgData, x, y, result = []) {
 }
 
 async function onTick() {
-  const speedFactor = document.getElementById("speedFactor").value;
+  const speedFactor = 10 - document.getElementById("speedFactor").value;
   tick++;
   if (tick >= height * speedFactor) tick = 0;
   const tickL = tick / speedFactor;
@@ -181,10 +181,15 @@ async function onTick() {
 
   const imgData = context.getImageData(0, 0, 4, height);
 
-  const p0 = toRGB(getPixelValue(imgData, 0, tickL));
-  const p1 = toRGB(getPixelValue(imgData, 1, tickL));
-  const p2 = toRGB(getPixelValue(imgData, 2, tickL));
-  const p3 = toRGB(getPixelValue(imgData, 3, tickL));
+  const rFactor = document.getElementById("rFactor").value;
+  const gFactor = document.getElementById("gFactor").value;
+  const bFactor = document.getElementById("bFactor").value;
+  const factors = [rFactor, gFactor, bFactor];
+
+  const p0 = toRGB(getPixelValue(imgData, 0, tickL), factors);
+  const p1 = toRGB(getPixelValue(imgData, 1, tickL), factors);
+  const p2 = toRGB(getPixelValue(imgData, 2, tickL), factors);
+  const p3 = toRGB(getPixelValue(imgData, 3, tickL), factors);
   await write([p0, p1, p2, p3]);
 }
 
