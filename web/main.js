@@ -1,6 +1,8 @@
 let port = null;
 let characteristic = null;
 
+const MAX_FRAMES = 60; // Must match firmware MAX_FRAMES
+
 async function connectSerial() {
   port = await navigator.serial.requestPort();
   await port.open({ baudRate: 115200 });
@@ -40,9 +42,10 @@ function hexToRgb(hex) {
 }
 
 function fixLimits(color) {
-  if (color.r == 0xff) color.r = 0xfe;
-  if (color.g == 0xff) color.g = 0xfe;
-  if (color.b == 0xff) color.b = 0xfe;
+  // Avoid 0xFF, 0xFE, 0xFD, 0xFC, 0xFB as they are command bytes
+  if (color.r >= 0xFB) color.r = 0xFA;
+  if (color.g >= 0xFB) color.g = 0xFA;
+  if (color.b >= 0xFB) color.b = 0xFA;
   return color;
 }
 
@@ -53,10 +56,11 @@ async function writePicker() {
     hexToRgb(document.getElementById("color2").value),
     hexToRgb(document.getElementById("color3").value),
   ];
-  await write(colors);
+  await writeStaticColor(colors);
 }
 
-async function write(colors) {
+// Send static color command (0xFF + 12 bytes)
+async function writeStaticColor(colors) {
   const modColors = colors.map((color) => fixLimits(color));
 
   var buffer = new ArrayBuffer(13);
@@ -80,8 +84,21 @@ async function write(colors) {
   view[11] = modColors[3].r;
   view[12] = modColors[3].g;
 
-  //console.log(view);
+  await sendData(view);
+}
 
+// Send speed command (0xFD + 1 byte)
+async function sendSpeed() {
+  const speed = parseInt(document.getElementById("speedFactor").value);
+  var buffer = new ArrayBuffer(2);
+  var view = new Uint8Array(buffer);
+  view[0] = 0xFD;
+  view[1] = speed;
+  await sendData(view);
+}
+
+// Generic send function
+async function sendData(view) {
   if(port){
     const writer = port.writable.getWriter();
     await writer.write(view);
@@ -92,14 +109,11 @@ async function write(colors) {
   }
 }
 
-let timer;
-let tick = 0;
-let height = 0;
-
 let canvas = document.getElementById("canvas");
 canvas.height = 1024;
 canvas.width = 32;
 let context = canvas.getContext("2d");
+let height = 0;
 
 function refreshImage() {
   let img = new Image();
@@ -112,14 +126,6 @@ function refreshImage() {
 
 document.getElementById("effect").addEventListener("change", refreshImage);
 refreshImage();
-
-function startEffect() {
-  timer = setInterval(onTick, 16);
-}
-
-function stopEffect() {
-  clearInterval(timer);
-}
 
 function toRGB(arr, factor) {
   return {
@@ -171,27 +177,59 @@ function getPixelValue(imgData, x, y, result = []) {
   return result;
 }
 
-async function onTick() {
-  const speedFactor = 10 - document.getElementById("speedFactor").value;
-  tick++;
-  if (tick >= height * speedFactor) tick = 0;
-  const tickL = tick / speedFactor;
+// Convert colors array to 12-byte frame
+function colorsToFrame(colors) {
+  const modColors = colors.map((color) => fixLimits(color));
+  return [
+    modColors[0].g, modColors[0].r, modColors[0].b,
+    modColors[1].g, modColors[1].r, modColors[1].b,
+    modColors[2].r, modColors[2].b, modColors[2].g,
+    modColors[3].b, modColors[3].r, modColors[3].g
+  ];
+}
 
-  // document.getElementById("counter").innerHTML = tickL;
-
+// Upload pattern to microcontroller (0xFE + count + frames)
+async function uploadPattern() {
   const imgData = context.getImageData(0, 0, 4, height);
-
+  
   const rFactor = document.getElementById("rFactor").value;
   const gFactor = document.getElementById("gFactor").value;
   const bFactor = document.getElementById("bFactor").value;
   const factors = [rFactor, gFactor, bFactor];
 
-  const p0 = toRGB(getPixelValue(imgData, 0, tickL), factors);
-  const p1 = toRGB(getPixelValue(imgData, 1, tickL), factors);
-  const p2 = toRGB(getPixelValue(imgData, 2, tickL), factors);
-  const p3 = toRGB(getPixelValue(imgData, 3, tickL), factors);
-  await write([p0, p1, p2, p3]);
+  // Sample frames from the pattern image
+  // Limit to MAX_FRAMES
+  const frameCount = Math.min(height, MAX_FRAMES);
+  const step = height / frameCount;
+  
+  // Build the upload buffer: 0xFE + frameCount + (frameCount * 12) bytes
+  const bufferSize = 2 + (frameCount * 12);
+  var buffer = new ArrayBuffer(bufferSize);
+  var view = new Uint8Array(buffer);
+  
+  view[0] = 0xFE;
+  view[1] = frameCount;
+  
+  let offset = 2;
+  for (let i = 0; i < frameCount; i++) {
+    const y = i * step;
+    const p0 = toRGB(getPixelValue(imgData, 0, y), factors);
+    const p1 = toRGB(getPixelValue(imgData, 1, y), factors);
+    const p2 = toRGB(getPixelValue(imgData, 2, y), factors);
+    const p3 = toRGB(getPixelValue(imgData, 3, y), factors);
+    
+    const frameData = colorsToFrame([p0, p1, p2, p3]);
+    for (let j = 0; j < 12; j++) {
+      view[offset++] = frameData[j];
+    }
+  }
+  
+  await sendData(view);
+  document.getElementById("status").innerHTML = `Uploaded ${frameCount} frames`;
 }
+
+// Send speed when slider changes
+document.getElementById("speedFactor").addEventListener("input", sendSpeed);
 
 document
   .getElementById("connectSerialButton")
@@ -200,5 +238,4 @@ document
   .getElementById("connectBluetoothButton")
   .addEventListener("click", connectBluetooth);
 document.getElementById("writeButton").addEventListener("click", writePicker);
-document.getElementById("startButton").addEventListener("click", startEffect);
-document.getElementById("stopButton").addEventListener("click", stopEffect);
+document.getElementById("uploadButton").addEventListener("click", uploadPattern);
