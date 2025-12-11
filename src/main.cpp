@@ -95,7 +95,8 @@ uint8_t uartAvailable(){
 // Returns a + (b - a) * step / INTERP_STEPS
 uint8_t lerp(uint8_t a, uint8_t b, uint8_t step){
 	int16_t diff = (int16_t)b - (int16_t)a;
-	return a + (int8_t)((diff * step) / INTERP_STEPS);
+	int16_t result = (int16_t)a + ((diff * step) / INTERP_STEPS);
+	return (uint8_t)result;
 }
 
 // Interpolate between two frames and load into PWM values

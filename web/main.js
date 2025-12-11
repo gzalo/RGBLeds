@@ -97,6 +97,9 @@ async function sendSpeed() {
   await sendData(view);
 }
 
+// BLE chunk size (default MTU is ~20 bytes, use conservative value)
+const BLE_CHUNK_SIZE = 20;
+
 // Generic send function
 async function sendData(view) {
   if(port){
@@ -105,7 +108,15 @@ async function sendData(view) {
     writer.releaseLock();
   }
   if(characteristic){
-    await characteristic.writeValue(view);
+    // BLE has limited MTU, send in chunks
+    for(let offset = 0; offset < view.length; offset += BLE_CHUNK_SIZE){
+      const chunk = view.slice(offset, Math.min(offset + BLE_CHUNK_SIZE, view.length));
+      await characteristic.writeValue(chunk);
+      // Small delay between chunks to avoid overwhelming the device
+      if(offset + BLE_CHUNK_SIZE < view.length){
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
   }
 }
 
@@ -162,18 +173,23 @@ function getPixelValue(imgData, x, y, result = []) {
   const d = imgData.data;
 
   for (i = 0; i < 3; i++) {
-    // interpolate x for top and bottom pixels
-    const c1 = (d[i2] * d[i2++] - d[i1] * d[i1]) * xpos + d[i1] * d[i1++];
-    const c2 = (d[i4] * d[i4++] - d[i3] * d[i3]) * xpos + d[i3] * d[i3++];
+    // interpolate x for top and bottom pixels (gamma-correct interpolation)
+    const d_i1 = d[i1];
+    const d_i2 = d[i2];
+    const d_i3 = d[i3];
+    const d_i4 = d[i4];
+    const c1 = (d_i2 * d_i2 - d_i1 * d_i1) * xpos + d_i1 * d_i1;
+    const c2 = (d_i4 * d_i4 - d_i3 * d_i3) * xpos + d_i3 * d_i3;
+    i1++; i2++; i3++; i4++;
 
     // now interpolate y
     result[i] = Math.sqrt((c2 - c1) * ypos + c1);
   }
 
   // and alpha is not logarithmic
-  const c1 = (d[i2] - d[i1]) * xpos + d[i1];
-  const c2 = (d[i4] - d[i3]) * xpos + d[i3];
-  result[3] = (c2 - c1) * ypos + c1;
+  const c1_a = (d[i2] - d[i1]) * xpos + d[i1];
+  const c2_a = (d[i4] - d[i3]) * xpos + d[i3];
+  result[3] = (c2_a - c1_a) * ypos + c1_a;
   return result;
 }
 
