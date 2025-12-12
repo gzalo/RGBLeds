@@ -1,5 +1,3 @@
-#define F_CPU 7372800 
-
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
@@ -10,6 +8,14 @@ void boardInit(){
 	DDRB = 0b00000001;
 	DDRD = 0b11111100;
 	DDRC = 0b00111111;	
+
+    PORTB |= 1;
+    _delay_ms(500);
+    PORTB &= ~1;
+    _delay_ms(500);
+    PORTB |= 1;
+    _delay_ms(500);
+    PORTB &= ~1;
 }
 
 #define STRIP0 4
@@ -26,7 +32,7 @@ void boardInit(){
 #define STRIP10 16
 #define STRIP11 32
 
-volatile uint8_t pwm[12], pwmAcc;
+volatile uint8_t pwm[12], pwmAcc = 0;
 
 // Pattern storage in RAM
 // Each frame is 12 bytes (4 RGB strips), max ~60 frames in 720 bytes
@@ -38,10 +44,7 @@ volatile uint8_t currentFrame = 0;   // Current playback frame
 volatile uint8_t playbackSpeed = 5;  // Speed 1-10 (higher = faster)
 volatile uint8_t playbackEnabled = 0; // Whether pattern playback is active
 volatile uint16_t tickCounter = 0;   // Counter for timing
-
-// Interpolation variables
-#define INTERP_STEPS 16  // Number of interpolation steps between frames
-volatile uint8_t interpStep = 0;  // Current interpolation step (0 to INTERP_STEPS-1)
+volatile uint16_t interpProgress = 0; // 0-255 interpolation progress (uint16_t to detect overflow)
 
 // Control loop
 ISR (TIMER0_OVF_vect){
@@ -91,31 +94,29 @@ uint8_t uartAvailable(){
 	return (UCSRA & (1<<RXC)) != 0;
 }
 
-// Linear interpolation between two values
-// Returns a + (b - a) * step / INTERP_STEPS
-uint8_t lerp(uint8_t a, uint8_t b, uint8_t step){
-	int16_t diff = (int16_t)b - (int16_t)a;
-	int16_t result = (int16_t)a + ((diff * step) / INTERP_STEPS);
-	return (uint8_t)result;
-}
-
 // Interpolate between two frames and load into PWM values
-void loadInterpolatedFrame(uint8_t frameIndex, uint8_t nextFrameIndex, uint8_t step){
+// progress: 0-255, where 0 = frame1, 255 = almost frame2
+void loadInterpolatedFrame(uint8_t frame1, uint8_t frame2, uint8_t progress){
 	uint8_t i;
-	uint8_t *framePtr = &patternBuffer[frameIndex * FRAME_SIZE];
-	uint8_t *nextFramePtr = &patternBuffer[nextFrameIndex * FRAME_SIZE];
+	uint8_t *ptr1 = &patternBuffer[frame1 * FRAME_SIZE];
+	uint8_t *ptr2 = &patternBuffer[frame2 * FRAME_SIZE];
+	int16_t val1, val2, diff;
+	
+	cli(); // Disable interrupts for atomic PWM update
 	for(i = 0; i < 12; i++){
-		pwm[i] = lerp(framePtr[i], nextFramePtr[i], step);
+		val1 = ptr1[i];
+		val2 = ptr2[i];
+		// Linear interpolation: val1 + (val2 - val1) * progress / 256
+		// Using int16_t to avoid overflow in multiplication
+		diff = val2 - val1;
+		pwm[i] = (uint8_t)(val1 + ((diff * (int16_t)progress) >> 8));
 	}
+	sei(); // Re-enable interrupts
 }
 
-// Load a frame from pattern buffer into PWM values (no interpolation)
+// Load a frame directly (no interpolation)
 void loadFrame(uint8_t frameIndex){
-	uint8_t i;
-	uint8_t *framePtr = &patternBuffer[frameIndex * FRAME_SIZE];
-	for(i = 0; i < 12; i++){
-		pwm[i] = framePtr[i];
-	}
+	loadInterpolatedFrame(frameIndex, frameIndex, 0);
 }
 
 // Commands:
@@ -126,8 +127,8 @@ void loadFrame(uint8_t frameIndex){
 // 0xFB: Stop playback
 
 int main(){
-	uint8_t i, cmd, frameCount, nextFrame;
-	uint16_t speedTicks;
+	uint8_t cmd, frameCount;
+	uint16_t i, speedTicks;
 	
 	boardInit();
 	uartInit();
@@ -137,28 +138,34 @@ int main(){
 		// Pattern playback logic with interpolation
 		if(playbackEnabled && patternLength > 0){
 			// Speed: 1 = slowest, 10 = fastest
-			// speedTicks determines how many loop iterations per interpolation step
-			speedTicks = (11 - playbackSpeed) * 60;
+			// Lower speedTicks = faster updates for smooth interpolation
+			speedTicks = (11 - playbackSpeed) * 20;
 			
 			tickCounter++;
 			if(tickCounter >= speedTicks){
 				tickCounter = 0;
 				
-				// Calculate next frame index (wrap around)
-				nextFrame = currentFrame + 1;
-				if(nextFrame >= patternLength){
-					nextFrame = 0;
+				// Increment interpolation progress
+				// Step size affects smoothness vs speed
+				interpProgress += 8;
+				
+				// Check if we've completed transition (progress >= 256)
+				if(interpProgress >= 256){
+					interpProgress = 0;
+					
+					// Advance to next frame (wrap around)
+					currentFrame++;
+					if(currentFrame >= patternLength){
+						currentFrame = 0;
+					}
 				}
 				
-				// Load interpolated values
-				loadInterpolatedFrame(currentFrame, nextFrame, interpStep);
+				// Calculate next frame index for interpolation
+				uint8_t nextFrame = currentFrame + 1;
+				if(nextFrame >= patternLength) nextFrame = 0;
 				
-				// Advance interpolation step
-				interpStep++;
-				if(interpStep >= INTERP_STEPS){
-					interpStep = 0;
-					currentFrame = nextFrame;
-				}
+				// Load interpolated values between current and next frame
+				loadInterpolatedFrame(currentFrame, nextFrame, (uint8_t)interpProgress);
 			}
 		}
 		
@@ -178,15 +185,18 @@ int main(){
 				frameCount = uartGetchar();
 				if(frameCount > MAX_FRAMES) frameCount = MAX_FRAMES;
 				
-				patternLength = frameCount;
+				// Stop playback during upload to prevent reading partial data
+				playbackEnabled = 0;
 				for(i = 0; i < frameCount * FRAME_SIZE; i++){
 					patternBuffer[i] = uartGetchar();
 				}
+				patternLength = frameCount; // Set length after buffer is filled
+				PORTB ^= 1;
 				
 				// Start playback
 				currentFrame = 0;
-				interpStep = 0;
 				tickCounter = 0;
+				interpProgress = 0;
 				playbackEnabled = 1;
 				loadFrame(0);
 			}
@@ -200,8 +210,8 @@ int main(){
 				// Start playback
 				if(patternLength > 0){
 					currentFrame = 0;
-					interpStep = 0;
 					tickCounter = 0;
+					interpProgress = 0;
 					playbackEnabled = 1;
 					loadFrame(0);
 				}

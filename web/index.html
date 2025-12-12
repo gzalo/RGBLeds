@@ -5,42 +5,133 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lights</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <style>
+      .log-area {
+        height: 150px;
+        overflow-y: auto;
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 8px;
+        font-family: monospace;
+        font-size: 12px;
+      }
+      .log-entry { margin: 2px 0; }
+      .log-info { color: #3273dc; }
+      .log-success { color: #23d160; }
+      .log-error { color: #ff3860; }
+      .log-data { color: #363636; }
+      .status-connected { color: #23d160; font-weight: bold; }
+      .status-disconnected { color: #ff3860; }
+      .color-preview {
+        display: inline-block;
+        width: 60px;
+        height: 30px;
+        border: 1px solid #333;
+        vertical-align: middle;
+        margin-left: 5px;
+      }
+      .section-box {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 15px;
+        background: #fafafa;
+      }
+      .section-title {
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #363636;
+      }
+      input[type="range"] {
+        width: 150px;
+        vertical-align: middle;
+      }
+      .value-display {
+        display: inline-block;
+        width: 40px;
+        text-align: right;
+        font-family: monospace;
+      }
+    </style>
   </head>
   <body>
-    <div class="container">
-    <h1 class="title">Lights</h1>
-    <button id="connectSerialButton" class="button">Connect Serial</button>
-    <button id="connectBluetoothButton" class="button">Connect Bluetooth</button>
-    <div id="status"></div>
-    <hr/>
-    <input type="color" value="#ff0000" id="color0">
-    <input type="color" value="#ff0000" id="color1">
-    <input type="color" value="#ff0000" id="color2">
-    <input type="color" value="#ff0000" id="color3">
-    <br>
-    <button id="writeButton" class="button mt-2">Send color</button>
-    <hr/>
+    <div class="container mt-4">
+    <h1 class="title">RGB LED Controller</h1>
+    
+    <!-- Connection Section -->
+    <div class="section-box">
+      <div class="section-title">Connection</div>
+      <button id="connectSerialButton" class="button is-primary">Connect Serial</button>
+      <button id="connectBluetoothButton" class="button is-info">Connect Bluetooth</button>
+      <span id="status" class="ml-3 status-disconnected">Not connected</span>
+    </div>
 
-    Color correction: <br>
-    <input type="range" min="0" max="1" step="0.05" id="rFactor" value="1"> Red<br/>
-    <input type="range" min="0" max="1" step="0.05" id="gFactor" value="1"> Green<br/>
-    <input type="range" min="0" max="1" step="0.05" id="bFactor" value="1"> Blue<br/>
-    <hr/>
+    <!-- Static Color Section -->
+    <div class="section-box">
+      <div class="section-title">Static Color (stops animation)</div>
+      <div class="mb-2">
+        <label>Strip 1:</label> <input type="color" value="#ff0000" id="color0"><span id="preview0" class="color-preview"></span>
+        <label class="ml-3">Strip 2:</label> <input type="color" value="#00ff00" id="color1"><span id="preview1" class="color-preview"></span>
+      </div>
+      <div class="mb-2">
+        <label>Strip 3:</label> <input type="color" value="#0000ff" id="color2"><span id="preview2" class="color-preview"></span>
+        <label class="ml-3">Strip 4:</label> <input type="color" value="#ffff00" id="color3"><span id="preview3" class="color-preview"></span>
+      </div>
+      <button id="writeButton" class="button is-warning" disabled>Send Static Color</button>
+      <span class="ml-2 is-size-7 has-text-grey">(This will stop any running animation)</span>
+    </div>
 
-    <input type="range" min="1" max="10" id="speedFactor" value="5"> Speed<br/>
-    <select id="effect">
-      <option value="patterns/green-forest.png" selected>Green Forest</option>
-      <option value="patterns/red-passion.png">Red Passion</option>
-      <option value="patterns/green-radioactive.png">Green Radioactive</option>
-      <option value="patterns/rainbow.png">Rainbow</option>
-      <option value="patterns/single-rainbow.png">Single rainbow</option>
-      <option value="patterns/weird-combinations.png">Weird combinations</option>
-      <option value="patterns/christmas.png">Christmas</option>
-    </select>
-    <br>
-    <button id="uploadButton" class="button mt-2">Upload pattern to device</button>
-    <div id="counter" class="mt-2"></div>
-    <canvas id="canvas" style="width:32px;height:1024px;"></canvas>
+    <!-- Animation Section -->
+    <div class="section-box">
+      <div class="section-title">Animation Pattern</div>
+      
+      <div class="mb-3">
+        <label>Pattern:</label>
+        <select id="effect" class="ml-2">
+          <option value="patterns/green-forest.png" selected>Green Forest</option>
+          <option value="patterns/red-passion.png">Red Passion</option>
+          <option value="patterns/green-radioactive.png">Green Radioactive</option>
+          <option value="patterns/rainbow.png">Rainbow</option>
+          <option value="patterns/single-rainbow.png">Single rainbow</option>
+          <option value="patterns/weird-combinations.png">Weird combinations</option>
+          <option value="patterns/christmas.png">Christmas</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label>Speed:</label>
+        <input type="range" min="1" max="10" id="speedFactor" value="5">
+        <span id="speedValue" class="value-display">5</span>
+        <span class="is-size-7 has-text-grey">(1=slowest, 10=fastest)</span>
+      </div>
+
+      <div class="mb-3">
+        <label>Color Correction:</label><br>
+        <span class="ml-3">R:</span> <input type="range" min="0" max="1" step="0.05" id="rFactor" value="1"> <span id="rValue" class="value-display">1.00</span>
+        <span class="ml-3">G:</span> <input type="range" min="0" max="1" step="0.05" id="gFactor" value="1"> <span id="gValue" class="value-display">1.00</span>
+        <span class="ml-3">B:</span> <input type="range" min="0" max="1" step="0.05" id="bFactor" value="1"> <span id="bValue" class="value-display">1.00</span>
+      </div>
+
+      <button id="uploadButton" class="button is-success" disabled>Upload Pattern &amp; Start Animation</button>
+      <button id="stopButton" class="button is-danger" disabled>Stop Animation</button>
+      <button id="startButton" class="button is-primary" disabled>Resume Animation</button>
+    </div>
+
+    <!-- Pattern Preview -->
+    <div class="section-box">
+      <div class="section-title">Pattern Preview</div>
+      <canvas id="canvas" style="width:64px;height:256px;border:1px solid #ccc;"></canvas>
+      <div id="counter" class="mt-2 is-size-7"></div>
+    </div>
+
+    <!-- Log Section -->
+    <div class="section-box">
+      <div class="section-title">Activity Log</div>
+      <div id="logArea" class="log-area"></div>
+      <button id="clearLogButton" class="button is-small mt-2">Clear Log</button>
+    </div>
+
     <script src="main.js"></script>
     </div>
   </body>
